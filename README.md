@@ -1,0 +1,2 @@
+# android_device_alps_aeon6735_66_d_n
+generic tablet
