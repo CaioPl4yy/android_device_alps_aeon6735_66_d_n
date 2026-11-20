@@ -72,6 +72,9 @@ jobs:
           # Android 9 minimal tree: test modules that require device modules missing from the manifest
           { grep -rl --include=Android.mk --include=Android.bp 'OverlayHostTests' frameworks 2>/dev/null || true; } | xargs -r rm -fv
 
+          # Debug info for the log: how TWRP references the linker
+          grep -n 'linker' bootable/recovery/Android.mk | head -20 || true
+
           mkdir -p "$DEVICE_PATH"
           cp -a /work/device-tree/. "$DEVICE_PATH"/
 
