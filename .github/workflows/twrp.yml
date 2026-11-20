@@ -9,6 +9,9 @@ on:
       manifest_branch:
         description: "Manifest branch (twrp-9.0 = TWRP 3.7.0_9-0)"
         default: "twrp-9.0"
+      size_limit:
+        description: "Recovery image size limit in bytes (16777216 = real partition size; raise only to inspect an oversized build, do not flash it)"
+        default: "16777216"
       publish_release:
         description: "Publish recovery.img as a GitHub release"
         type: boolean
@@ -82,10 +85,18 @@ jobs:
           set +u
           source build/envsetup.sh
           lunch "${PRODUCT}-eng"
-          mka recoveryimage -j"$(nproc)"
-          set -u
-
           OUT="out/target/product/$DEVICE"
+          set +e
+          mka recoveryimage -j"$(nproc)" BOARD_RECOVERYIMAGE_PARTITION_SIZE="${SIZE_LIMIT:-16777216}"
+          RC=$?
+          set -eu
+
+          echo "=== recovery ramdisk composition (largest first) ==="
+          ls -l "$OUT/ramdisk-recovery.img" "$OUT/kernel" "$OUT/recovery.img" 2>&1 || true
+          { (cd "$OUT/recovery/root" && du -ab . | sort -rn | head -45) || true; }
+          echo "=== end of composition ==="
+          if [ "$RC" -ne 0 ]; then exit "$RC"; fi
+
           mkdir -p /work/artifacts
           cp "$OUT/recovery.img" /work/artifacts/recovery.img
           (cd /work/artifacts && sha256sum recovery.img > recovery.img.sha256)
@@ -99,9 +110,10 @@ jobs:
         env:
           MANIFEST_URL: ${{ inputs.manifest_url }}
           MANIFEST_BRANCH: ${{ inputs.manifest_branch }}
+          SIZE_LIMIT: ${{ inputs.size_limit }}
         run: |
           docker run --rm \
-            -e DEVICE -e DEVICE_PATH -e PRODUCT -e MANIFEST_URL -e MANIFEST_BRANCH \
+            -e DEVICE -e DEVICE_PATH -e PRODUCT -e MANIFEST_URL -e MANIFEST_BRANCH -e SIZE_LIMIT \
             -v /mnt/twrp:/work \
             ubuntu:20.04 bash /work/build.sh
 
