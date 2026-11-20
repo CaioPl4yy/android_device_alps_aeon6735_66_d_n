@@ -69,6 +69,9 @@ jobs:
           repo init --depth=1 -u "$MANIFEST_URL" -b "$MANIFEST_BRANCH"
           repo sync -c -j"$(nproc)" --force-sync --no-clone-bundle --no-tags
 
+          # Android 9 minimal tree: test modules that require device modules missing from the manifest
+          { grep -rl --include=Android.mk --include=Android.bp 'OverlayHostTests' frameworks 2>/dev/null || true; } | xargs -r rm -fv
+
           mkdir -p "$DEVICE_PATH"
           cp -a /work/device-tree/. "$DEVICE_PATH"/
 
