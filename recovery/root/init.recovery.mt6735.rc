@@ -1,0 +1,3 @@
+on init
+    # MTK USB: leave charge-detect mode so adb/MTP enumerate in recovery
+    write /sys/devices/platform/mt_usb/cmode 1
