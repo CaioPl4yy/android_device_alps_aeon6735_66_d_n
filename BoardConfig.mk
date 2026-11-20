@@ -77,6 +77,9 @@ TW_NO_REBOOT_BOOTLOADER := true
 # Keep the image small: the recovery partition is only 16 MB and the kernel takes ~6.5 MB
 TW_EXCLUDE_SUPERSU := true
 TW_EXCLUDE_TWRPAPP := true
+TW_EXCLUDE_ENCRYPTED_BACKUPS := true
+TW_NO_EXFAT := true
+TW_NO_EXFAT_FUSE := true
 # TODO: stock userdata uses encryptable=<metadata partition>, crypto is left off for now
 
 -include vendor/eastaeon/aeon6735_66_d_n/BoardConfigVendor.mk
