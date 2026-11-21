@@ -18,7 +18,8 @@ TARGET_CPU_VARIANT := cortex-a53
 # 32-bit secondary arch (zygote64_32 userspace). Kept for TWRP too: the TWRP 9.0 relink step
 # needs the 32-bit linker, a 64-bit-only build fails with "system/bin/linker missing".
 TARGET_2ND_ARCH := arm
-TARGET_2ND_ARCH_VARIANT := armv8-a
+# armv8-a is not a valid 32-bit variant before Android 8.0, armv7-a-neon works on every branch
+TARGET_2ND_ARCH_VARIANT := armv7-a-neon
 TARGET_2ND_CPU_ABI := armeabi-v7a
 TARGET_2ND_CPU_ABI2 := armeabi
 TARGET_2ND_CPU_VARIANT := cortex-a53
