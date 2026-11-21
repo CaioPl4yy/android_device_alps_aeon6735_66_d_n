@@ -65,8 +65,10 @@ RECOVERY_VARIANT := twrp
 endif
 # Panel is 800x1280 portrait, density 210
 TW_THEME := portrait_hdpi
-# Stock uses ro.sf.hwrotation=180, remove this line if the first boot looks right without it
-TW_ROTATION := 180
+# The panel is mounted upside down (stock uses ro.sf.hwrotation=180).
+# BOARD_HAS_FLIPPED_SCREEN works on every TWRP branch (TW_ROTATION is not honored by old ones,
+# and using both would cancel out). Remove this line if the first boot looks right without it.
+BOARD_HAS_FLIPPED_SCREEN := true
 TW_DEFAULT_LANGUAGE := en
 # TODO: verify the backlight path on the device
 TW_BRIGHTNESS_PATH := /sys/class/leds/lcd-backlight/brightness
