@@ -97,13 +97,14 @@ jobs:
           lunch "${PRODUCT}-eng"
           OUT="out/target/product/$DEVICE"
           set +e
-          mka recoveryimage -j"$(nproc)" BOARD_RECOVERYIMAGE_PARTITION_SIZE="${SIZE_LIMIT:-16777216}"
+          # "m" instead of "mka": mka needs schedtool on 7.x branches
+          m -j"$(nproc)" recoveryimage BOARD_RECOVERYIMAGE_PARTITION_SIZE="${SIZE_LIMIT:-16777216}"
           RC=$?
           set -eu
 
           echo "=== recovery ramdisk composition (largest first) ==="
           ls -l "$OUT/ramdisk-recovery.img" "$OUT/kernel" "$OUT/recovery.img" 2>&1 || true
-          { (cd "$OUT/recovery/root" && du -ab . | sort -rn | head -45) || true; }
+          if [ -d "$OUT/recovery/root" ]; then (cd "$OUT/recovery/root" && du -ab . | sort -rn | head -45) || true; fi
           echo "=== end of composition ==="
           if [ "$RC" -ne 0 ]; then exit "$RC"; fi
 
