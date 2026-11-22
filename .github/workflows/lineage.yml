@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 355
     env:
       BLOBS_REPO: CaioPl4yy/aeon6735_66_d_n-blobs
-      BLOBS_TOKEN: ${{ secrets.BLOBS_TOKEN }}
+      GH_TOKEN: ${{ secrets.BLOBS_TOKEN }}
     steps:
       - name: Maximize build space
         uses: easimon/maximize-build-space@v10
@@ -58,9 +58,11 @@ jobs:
       - name: Download webview from private release
         run: |
           echo "Baixando webview.apk..."
-          curl -fsSL -H "Authorization: token $BLOBS_TOKEN" -H "Accept: application/octet-stream" -L \
-            "https://github.com/$BLOBS_REPO/releases/download/v1.0/webview.apk" \
-            -o webview.apk
+          gh release download v1.0 \
+            --repo "$BLOBS_REPO" \
+            --pattern "webview.apk" \
+            --dir .
+          ls -lh webview.apk
 
       - name: Restore ccache
         uses: actions/cache/restore@v4
