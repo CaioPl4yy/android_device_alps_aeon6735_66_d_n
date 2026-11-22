@@ -34,18 +34,10 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 355
+    env:
+      BLOBS_REPO: CaioPl4yy/aeon6735_66_d_n-blobs
+      BLOBS_TOKEN: ${{ secrets.BLOBS_TOKEN }}
     steps:
-      - name: Check secrets
-        env:
-          BLOBS_REPO: ${{ secrets.BLOBS_REPO }}
-          BLOBS_TOKEN: ${{ secrets.BLOBS_TOKEN }}
-        run: |
-          if [ -z "$BLOBS_REPO" ] || [ -z "$BLOBS_TOKEN" ]; then
-            echo "::error::Set the BLOBS_REPO (owner/name) and BLOBS_TOKEN secrets, see README"
-            exit 1
-          fi
-
-      # Must run before checkout: it repartitions the runner disks and mounts the workspace on them.
       - name: Maximize build space
         uses: easimon/maximize-build-space@v10
         with:
@@ -63,20 +55,12 @@ jobs:
         with:
           path: device-tree
 
-      - name: Checkout proprietary blobs (private repo)
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ secrets.BLOBS_REPO }}
-          token: ${{ secrets.BLOBS_TOKEN }}
-          path: blobs
-
-      - name: Check that stock_blobs.zip is in the blobs repo
+      - name: Download webview from private release
         run: |
-          if [ ! -f blobs/stock_blobs.zip ]; then
-            echo "::error::stock_blobs.zip not found at the root of the blobs repo"
-            exit 1
-          fi
-          unzip -tq blobs/stock_blobs.zip
+          echo "Baixando webview.apk..."
+          curl -fsSL -H "Authorization: token $BLOBS_TOKEN" -H "Accept: application/octet-stream" -L \
+            "https://github.com/$BLOBS_REPO/releases/download/v1.0/webview.apk" \
+            -o webview.apk
 
       - name: Restore ccache
         uses: actions/cache/restore@v4
@@ -105,7 +89,6 @@ jobs:
             libssl-dev liblz4-tool libncurses5-dev lib32readline-dev libsdl1.2-dev pngcrush \
             squashfs-tools xz-utils file ccache
 
-          # Instala o repo do jeito certo (via Google)
           curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
           chmod +x /usr/local/bin/repo
 
@@ -116,28 +99,43 @@ jobs:
           mkdir -p /work/lineage /work/artifacts
           cd /work/lineage
 
-          # repo init APONTANDO PARA O LINEAGEOS (corrigido)
           repo init -u https://github.com/LineageOS/android.git -b "$BRANCH" --depth=1 -g default,-darwin
 
-          # --- CORREÇÃO DO WEBVIEW VIA MANIFESTO LOCAL ---
           mkdir -p .repo/local_manifests
           cat > .repo/local_manifests/remove_webview.xml << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <manifest>
             <remove-project name="LineageOS/android_external_chromium-webview_prebuilt_arm" />
             <remove-project name="LineageOS/android_external_chromium-webview_prebuilt_arm64" />
+            <remove-project name="LineageOS/android_external_chromium-webview_prebuilt_x86" />
             <remove-project name="LineageOS/android_external_chromium-webview_prebuilt_x86_64" />
           </manifest>
           EOF
-          # ----------------------------------------------
 
           repo sync -c -j "$(nproc)" --force-sync --no-clone-bundle --no-tags --optimized-fetch
           df -h /work
 
+          echo "Injetando o webview.apk..."
+          WEBVIEW_DIR="external/chromium-webview/prebuilt/arm64"
+          mkdir -p "$WEBVIEW_DIR"
+          cp /work/webview.apk "$WEBVIEW_DIR/webview.apk"
+
+          cat > "$WEBVIEW_DIR/Android.mk" << 'EOF'
+          LOCAL_PATH := $(call my-dir)
+          include $(CLEAR_VARS)
+          LOCAL_MODULE := webview
+          LOCAL_MODULE_CLASS := APPS
+          LOCAL_MODULE_TAGS := optional
+          LOCAL_MODULE_SUFFIX := $(COMMON_ANDROID_PACKAGE_SUFFIX)
+          LOCAL_CERTIFICATE := PRESIGNED
+          LOCAL_SRC_FILES := webview.apk
+          LOCAL_PRODUCT_MODULE := true
+          include $(BUILD_PREBUILT)
+          EOF
+
           DEVPATH="device/eastaeon/$DEVICE"
           mkdir -p "$DEVPATH"
           rsync -a --exclude .git --exclude .github /work/device-tree/ "$DEVPATH/"
-          python3 "$DEVPATH/tools/make_vendor.py" /work/blobs/stock_blobs.zip "vendor/eastaeon/$DEVICE"
 
           export USE_CCACHE=1
           export CCACHE_DIR=/work/ccache
