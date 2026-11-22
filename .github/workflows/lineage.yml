@@ -4,20 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: "What to build (nothing = only parse the tree, a quick sanity check)"
+        description: What to build (nothing = only parse the tree, a quick sanity check)
         type: choice
         default: bacon
         options: [nothing, bootimage, systemimage, bacon]
       variant:
-        description: "Build variant (userdebug also honors androidboot.selinux=permissive from the LK)"
+        description: Build variant (userdebug also honors androidboot.selinux=permissive from the LK)
         type: choice
         default: userdebug
         options: [userdebug, eng]
       lineage_branch:
-        description: "LineageOS manifest branch"
-        default: "lineage-15.1"
+        description: LineageOS manifest branch
+        default: lineage-15.1
       build_minutes:
-        description: "Time budget for the compile step (the job limit is 360 min, sync takes ~40)"
+        description: Time budget for the compile step (the job limit is 360 min, sync takes ~40)
         default: "250"
 
 permissions:
@@ -46,18 +46,17 @@ jobs:
           fi
 
       # Must run before checkout: it repartitions the runner disks and mounts the workspace on them.
-      # Third-party action, pinned to a major tag; use @master if the tag is not found.
       - name: Maximize build space
         uses: easimon/maximize-build-space@v10
         with:
           root-reserve-mb: 4096
           temp-reserve-mb: 1024
           swap-size-mb: 4096
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
-          remove-docker-images: 'true'
+          remove-dotnet: true
+          remove-android: true
+          remove-haskell: true
+          remove-codeql: true
+          remove-docker-images: true
 
       - name: Checkout device tree
         uses: actions/checkout@v4
@@ -92,7 +91,7 @@ jobs:
 
       - name: Write build script
         run: |
-          cat > "$GITHUB_WORKSPACE/build.sh" <<'SCRIPT'
+          cat > "$GITHUB_WORKSPACE/build.sh" << 'SCRIPT'
           #!/bin/bash
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive TZ=UTC LC_ALL=C
@@ -106,53 +105,76 @@ jobs:
             libssl-dev liblz4-tool libncurses5-dev lib32readline-dev libsdl1.2-dev pngcrush \
             squashfs-tools xz-utils file ccache
 
-          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
+          curl -fsSL https://googleapis.com -o /usr/local/bin/repo
           chmod +x /usr/local/bin/repo
+
           git config --global user.name "lineage-ci"
-          git config --global user.email "lineage-ci@users.noreply.github.com"
+          git config --global user.email "lineage-ci@://github.com"
           git config --global color.ui false
 
           mkdir -p /work/lineage /work/artifacts
           cd /work/lineage
-          repo init -u https://github.com/LineageOS/android.git -b "$BRANCH" --depth=1 -g default,-darwin
-          repo sync -c -j"$(nproc)" --force-sync --no-clone-bundle --no-tags --optimized-fetch
+
+          repo init -u https://github.com -b "$BRANCH" --depth=1 -g default,-darwin
+
+          # --- CORREÇÃO DO WEBVIEW VIA MANIFESTO LOCAL ---
+          mkdir -p .repo/local_manifests
+          cat > .repo/local_manifests/remove_webview.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <manifest>
+            <remove-project name="LineageOS/android_external_chromium-webview_prebuilt_arm" />
+            <remove-project name="LineageOS/android_external_chromium-webview_prebuilt_arm64" />
+            <remove-project name="LineageOS/android_external_chromium-webview_prebuilt_x86_64" />
+          </manifest>
+          EOF
+          # ----------------------------------------------
+
+          repo sync -c -j "$(nproc)" --force-sync --no-clone-bundle --no-tags --optimized-fetch
           df -h /work
 
-          DEVPATH=device/eastaeon/$DEVICE
+          DEVPATH="device/eastaeon/$DEVICE"
           mkdir -p "$DEVPATH"
-          rsync -a --exclude '.git' --exclude '.github' /work/device-tree/ "$DEVPATH"/
+          rsync -a --exclude .git --exclude .github /work/device-tree/ "$DEVPATH/"
           python3 "$DEVPATH/tools/make_vendor.py" /work/blobs/stock_blobs.zip "vendor/eastaeon/$DEVICE"
 
-          export USE_CCACHE=1 CCACHE_DIR=/work/ccache CCACHE_COMPRESS=1
+          export USE_CCACHE=1
+          export CCACHE_DIR=/work/ccache
+          export CCACHE_COMPRESS=1
           mkdir -p "$CCACHE_DIR"
           prebuilts/misc/linux-x86/ccache/ccache -M 7G || true
 
           OUT="out/target/product/$DEVICE"
           set +e
-          # "m" is a shell function, so it runs inside a bash -c under timeout
-          timeout --signal=INT --kill-after=120 "${BUILD_MINUTES}m" bash -c '
+          timeout --signal=INT --kill-after=120 "${BUILD_MINUTES}m" bash -c "
             set +u
             source build/envsetup.sh
-            lunch "lineage_${DEVICE}-${VARIANT}" || exit 1
-            m -j"$(nproc)" "$TARGET"
-          ' 2>&1 | tee /work/artifacts/build.log | tail -n 40
+            lunch lineage_${DEVICE}-${VARIANT} || exit 1
+            m -j \$(nproc) $TARGET
+          " 2>&1 | tee /work/artifacts/build.log | tail -n 40
           RC=${PIPESTATUS[0]}
           set -e
 
-          if [ -f out/error.log ]; then tail -n 300 out/error.log > /work/artifacts/error_tail.log; fi
+          if [ -f out/error.log ]; then
+            tail -n 300 out/error.log > /work/artifacts/error_tail.log
+          fi
+
           [ -f "$OUT/boot.img" ] && cp "$OUT/boot.img" /work/artifacts/ || true
           ls "$OUT"/lineage-*.zip >/dev/null 2>&1 && cp "$OUT"/lineage-*.zip* /work/artifacts/ || true
+
           if [ "$TARGET" = "systemimage" ] && [ -f "$OUT/system.img" ]; then
             gzip -1 -c "$OUT/system.img" > /work/artifacts/system.img.gz
           fi
+
           if [ -d "$OUT/system" ]; then
             python3 "$DEVPATH/tools/check_symbols.py" "$OUT/system" > /work/artifacts/unresolved_symbols.txt 2>&1 || true
           fi
+
           gzip -f /work/artifacts/build.log || true
 
           if [ "$RC" -eq 124 ]; then
             echo "::warning::Compile step hit the time budget. Run the workflow again: the ccache was saved and the next run resumes from it."
           fi
+
           exit "$RC"
           SCRIPT
           chmod +x "$GITHUB_WORKSPACE/build.sh"
