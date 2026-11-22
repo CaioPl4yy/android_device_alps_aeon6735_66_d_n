@@ -71,6 +71,14 @@ jobs:
           token: ${{ secrets.BLOBS_TOKEN }}
           path: blobs
 
+      - name: Check that stock_blobs.zip is in the blobs repo
+        run: |
+          if [ ! -f blobs/stock_blobs.zip ]; then
+            echo "::error::stock_blobs.zip not found at the root of the blobs repo"
+            exit 1
+          fi
+          unzip -tq blobs/stock_blobs.zip
+
       - name: Restore ccache
         uses: actions/cache/restore@v4
         with:
