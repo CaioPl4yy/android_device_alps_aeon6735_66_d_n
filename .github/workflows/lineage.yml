@@ -105,8 +105,11 @@ jobs:
             libssl-dev liblz4-tool libncurses5-dev lib32readline-dev libsdl1.2-dev pngcrush \
             squashfs-tools xz-utils file ccache
 
-          curl -fsSL https://googleapis.com -o /usr/local/bin/repo
+          # Instala o repo diretamente do repositório oficial do Gerrit (branch repo-1 compatível com Ubuntu 18.04)
+          git clone --depth=1 -b repo-1 https://googlesource.com /tmp/git-repo
+          cp /tmp/git-repo/repo /usr/local/bin/repo
           chmod +x /usr/local/bin/repo
+          rm -rf /tmp/git-repo
 
           git config --global user.name "lineage-ci"
           git config --global user.email "lineage-ci@://github.com"
@@ -115,7 +118,7 @@ jobs:
           mkdir -p /work/lineage /work/artifacts
           cd /work/lineage
 
-          repo init -u https://github.com -b "$BRANCH" --depth=1 -g default,-darwin
+          repo init -u https://github.com -b "$BRANCH" --depth=1 -g default,-darwin --repo-rev=repo-1
 
           # --- CORREÇÃO DO WEBVIEW VIA MANIFESTO LOCAL ---
           mkdir -p .repo/local_manifests
@@ -151,7 +154,7 @@ jobs:
             lunch lineage_${DEVICE}-${VARIANT} || exit 1
             m -j \$(nproc) $TARGET
           " 2>&1 | tee /work/artifacts/build.log | tail -n 40
-          RC=${PIPESTATUS[0]}
+          RC=${PIPESTATUS}
           set -e
 
           if [ -f out/error.log ]; then
