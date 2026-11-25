@@ -55,6 +55,15 @@ jobs:
         with:
           path: device-tree
 
+      # Baixa o repositório de blobs (que contém o stock_blobs.zip na raiz)
+      - name: Checkout proprietary blobs (private repo)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.BLOBS_REPO }}
+          token: ${{ secrets.BLOBS_TOKEN }}
+          path: blobs
+
+      # Baixa APENAS o webview.apk do Release
       - name: Download webview from private release
         run: |
           echo "Baixando webview.apk..."
@@ -117,6 +126,7 @@ jobs:
           repo sync -c -j "$(nproc)" --force-sync --no-clone-bundle --no-tags --optimized-fetch
           df -h /work
 
+          # Injeção do WebView
           echo "Injetando o webview.apk..."
           WEBVIEW_DIR="external/chromium-webview/prebuilt/arm64"
           mkdir -p "$WEBVIEW_DIR"
@@ -135,9 +145,13 @@ jobs:
           include $(BUILD_PREBUILT)
           EOF
 
-          DEVPATH="device/eastaeon/$DEVICE"
+          # CORREÇÃO DO CAMINHO: O fabricante é "alps" (baseado no nome do seu repo)
+          DEVPATH="device/alps/$DEVICE"
           mkdir -p "$DEVPATH"
           rsync -a --exclude .git --exclude .github /work/device-tree/ "$DEVPATH/"
+          
+          # Executa o script de vendor
+          python3 "$DEVPATH/tools/make_vendor.py" /work/blobs/stock_blobs.zip "vendor/alps/$DEVICE"
 
           export USE_CCACHE=1
           export CCACHE_DIR=/work/ccache
